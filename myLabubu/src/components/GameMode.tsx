@@ -44,7 +44,8 @@ export default function GameMode() {
 
   const songs = [
     'Happy Birthday',
-    
+    'Thotiana',
+    'Twinkle Twinkle Little Star'
   ];
   const SONG_KEY_MAP: Record<string, string> = {
     'Happy Birthday': 'happy_birthday',

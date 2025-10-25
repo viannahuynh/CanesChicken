@@ -10,8 +10,11 @@ from scipy.ndimage import median_filter
 # based on the sheet you showed (starts on D4, includes F#4, etc.).
 HAPPY_BIRTHDAY_NOTES = [
     "D4","D4","E4","D4","G4","F#4",
-    "D4","D4","E4","D4","A4","G4"
+    "D4","D4","E4","D4","A4","G4",
+    "D4","D4","D4","B4","A4","G4",
+    "F#4","C4","C4","B4","G4","A4","G4"
 ]
+
 
 # You can add more songs later:
 # TWINKLE_TWINKLE = [ ... ]
