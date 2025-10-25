@@ -24,7 +24,7 @@ export default function GameMode() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [performances, setPerformances] = useState<Performance[]>([]);
-  const [targetSong, setTargetSong] = useState<string>('Twinkle Twinkle Little Star');
+  const [targetSong, setTargetSong] = useState<string>('Happy Birthday');
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
