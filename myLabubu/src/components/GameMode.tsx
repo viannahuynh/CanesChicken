@@ -134,7 +134,7 @@ export default function GameMode() {
       formData.append('song_key', songKey);
       formData.append('player_audio', audioBlob, `player${currentPlayer}.webm`);
 
-      const res = await fetch('https://www.awwsheet.ink/analyzeSinglePlayer', {
+      const res = await fetch('https://caneschicken.onrender.com/analyzeSinglePlayer', {
         method: 'POST',
         body: formData,
       });
