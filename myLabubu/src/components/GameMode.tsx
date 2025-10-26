@@ -42,6 +42,12 @@ export default function GameMode() {
     };
   }, []);
 
+  useEffect(() => {
+    if (recordingTime >= 10 && isRecording) {
+      stopRecording();
+    }
+  }, [recordingTime, isRecording]);
+
   const songs = [
     'Happy Birthday',
     'Thotiana',
@@ -103,13 +109,7 @@ export default function GameMode() {
 
       // start countdown to 10s
       timerRef.current = setInterval(() => {
-        setRecordingTime(prev => {
-          if (prev >= 9) {
-            stopRecording(); // this will trigger onstop
-            return 10;
-          }
-          return prev + 1;
-        });
+        setRecordingTime(prev => prev + 1);
       }, 1000);
     } catch (error) {
       console.error('Error accessing microphone:', error);
