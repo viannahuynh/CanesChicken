@@ -136,7 +136,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               ♪
             </div>
           </motion.div>
-          <span className="text-[#1e3a5f] text-2xl" style={{ fontWeight: 700 }}>Transcripto</span>
+          <span className="text-[#1e3a5f] text-2xl" style={{ fontWeight: 700 }}>Aww Sheet.</span>
         </div>
         <div className="flex items-center gap-8">
           <button
@@ -173,7 +173,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            Transcripto
+            Aww Sheet.
           </motion.h1>
           <motion.p
             className="text-[#1e3a5f] text-2xl mb-12"
@@ -182,7 +182,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
           >
-            Transform any instrument performance into digital sheet music instantly
+            Make music from scratch or compete with friends on your favorite songs.<br />
+  Either way, every note counts.
           </motion.p>
         </div>
 

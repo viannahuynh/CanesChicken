@@ -397,11 +397,11 @@ export default function GameMode() {
                 <div className="relative">
                   <button
                     onClick={stopRecording}
-                    className="w-28 h-28 rounded-full bg-gradient-to-br from-[#2d5a8f] to-[#4a7ba7] hover:from-[#4a7ba7] hover:to-[#5a8bc0] animate-pulse flex items-center justify-center shadow-2xl pulse-glow"
+                    className="w-28 h-28 rounded-full bg-gradient-to-br from-[#2d5a8f] to-[#4a7ba7] hover:from-[#4a7ba7] hover:to-[#5a8bc0] animate-pulse flex items-center justify-center shadow-2xl pulse-glow relative z-10"
                   >
                     <Square className="w-12 h-12 text-white fill-white" />
                   </button>
-                  <div className="absolute -inset-2 border-4 border-[#4a7ba7] rounded-full animate-ping opacity-75" />
+                  <div className="absolute -inset-2 border-4 border-[#4a7ba7] rounded-full animate-ping opacity-75 pointer-events-none" />
                 </div>
 
                 <div className="text-center space-y-4 w-full max-w-md">
