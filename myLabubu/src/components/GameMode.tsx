@@ -39,6 +39,12 @@ export default function GameMode() {
     };
   }, []);
 
+  useEffect(() => {
+    if (recordingTime >= 10 && isRecording) {
+      stopRecording();
+    }
+  }, [recordingTime, isRecording]);
+
   const songs = ['Happy Birthday', 'Thotiana', 'Twinkle Twinkle Little Star'];
 
   const SONG_KEY_MAP: Record<string, string> = {
@@ -88,13 +94,7 @@ export default function GameMode() {
       setRecordingTime(0);
 
       timerRef.current = setInterval(() => {
-        setRecordingTime((prev) => {
-          if (prev >= 9) {
-            stopRecording();
-            return 10;
-          }
-          return prev + 1;
-        });
+        setRecordingTime(prev => prev + 1);
       }, 1000);
     } catch (error) {
       console.error('Error accessing microphone:', error);
