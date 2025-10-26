@@ -6,6 +6,7 @@ import { Music, Mic, Gamepad2 } from 'lucide-react';
 import HomePage from './components/HomePage';
 import MusicNoteBackground from './components/MusicNoteBackground';
 import { playClickSound } from './utils/soundEffects';
+import BandDirectorChat from './components/BandDirectorChat';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
@@ -129,6 +130,7 @@ export default function App() {
           </div>
         )}
       </main>
+      <BandDirectorChat />
     </div>
   );
 }
