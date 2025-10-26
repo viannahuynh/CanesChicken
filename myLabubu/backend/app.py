@@ -18,6 +18,7 @@ app.add_middleware(
         # "http://127.0.0.1:5173",
         "https://www.awwsheet.ink",
         "https://canes-chicken.vercel.app.ink",
+        "https://caneschicken.onrender.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
