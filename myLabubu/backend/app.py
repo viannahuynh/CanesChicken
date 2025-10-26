@@ -7,15 +7,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from music21 import stream, note, meter, tempo, key as m21key, interval, pitch, clef
 
+# --- imports for the game endpoint ---
+from pydub import AudioSegment              # for webm -> wav
+from gameJudger import analyze_single_player  # your existing analysis
+
 app = FastAPI()
+
+# CORS for your React app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ----------------------- helpers -----------------------
+# ----------------------- shared helpers -----------------------
 def note_to_name_octave(n: note.Note) -> tuple[str, int]:
     step = n.pitch.step
     acc = n.pitch.accidental
@@ -66,12 +76,9 @@ def transcode_to_wav_bytes(raw_bytes: bytes, in_ext: str, target_sr: int = 22050
         raise HTTPException(status_code=400, detail=f"ffmpeg failed: {err}")
 
 # ---------- RHYTHM POLICY: only these note values, no ties ----------
-ALLOWED_DURS = [4.0, 2.0, 1.5, 1.0]   # whole, half, dotted-quarter, quarter (descending)
+ALLOWED_DURS = [4.0, 2.0, 1.5, 1.0]   # whole, half, dotted-quarter, quarter
 
 def pick_allowed_duration(raw_q: float, strategy: str = "nearest") -> float:
-    """
-    Map a raw quarter-length to one of ALLOWED_DURS using the chosen strategy.
-    """
     arr = np.array(ALLOWED_DURS, dtype=float)
     if strategy == "floor":
         candidates = arr[arr <= raw_q + 1e-9]
@@ -85,14 +92,12 @@ def pick_allowed_duration(raw_q: float, strategy: str = "nearest") -> float:
 def split_across_measures_no_tie(qlen: float, pos_in_measure: float) -> list[tuple[str, float]]:
     """
     Split a logical duration so it never crosses a barline.
-    Returns a list of (kind, qlen) where kind is 'note' or 'rest'.
-    If we land too close to a barline to place any allowed note (remaining < 1.0),
-    we insert a rest to reach the next measure (so we can keep allowed values only).
+    Returns [(kind, qlen)] where kind ∈ {'note','rest'}.
+    If < 1 beat remains in the current measure, insert a rest to move to next bar.
     """
     out: list[tuple[str, float]] = []
     remaining_in_measure = 4.0 - (pos_in_measure % 4.0)
 
-    # If less than a quarter remains in this measure, push to next with a rest.
     if remaining_in_measure < 1.0:
         out.append(("rest", remaining_in_measure))
         qlen_left = qlen
@@ -102,12 +107,10 @@ def split_across_measures_no_tie(qlen: float, pos_in_measure: float) -> list[tup
             qlen_left -= chunk
         return out
 
-    # Place as much as fits in current bar (no crossing).
     chunk = min(qlen, remaining_in_measure)
     out.append(("note", chunk))
     q_left = qlen - chunk
 
-    # Remainder goes into subsequent full measures in chunks of <= 4.0
     while q_left > 0:
         chunk2 = min(q_left, 4.0)
         out.append(("note", chunk2))
@@ -118,7 +121,7 @@ def split_across_measures_no_tie(qlen: float, pos_in_measure: float) -> list[tup
 # ---------- analysis (PITCH UNCHANGED, RHYTHM REWRITTEN) ----------
 def analyze_to_stream(
     wav_bytes: bytes,
-    quantize_divisions: int = 8,          # IGNORED (kept for compatibility)
+    quantize_divisions: int = 8,          # ignored (kept for compatibility)
     quantize_strategy: str = "nearest",   # "nearest" | "floor" | "ceil"
     bpm_override: float | None = None,    # optional tempo spelling
 ):
@@ -142,7 +145,7 @@ def analyze_to_stream(
     tempo_used = float(bpm_override) if (bpm_override is not None and 30.0 <= bpm_override <= 300.0) else float(tempo_est)
     q_sec = 60.0 / tempo_used
 
-    # ONSETS (unchanged segmentation; no snapping/merging)
+    # onsets (preserve segmentation; no snapping/merging)
     on_frames = librosa.onset.onset_detect(
         y=y, sr=sr, units="frames", backtrack=True,
         pre_max=30, post_max=30, pre_avg=40, post_avg=40, delta=0.07, wait=12
@@ -150,12 +153,12 @@ def analyze_to_stream(
     on_times = librosa.frames_to_time(on_frames, sr=sr)
     total_t = librosa.get_duration(y=y, sr=sr)
 
-    # cuts = start + all onsets + end (preserve note count)
+    # cuts = start + onsets + end
     cuts = np.unique(np.concatenate([[0.0], on_times, [total_t]])).tolist()
     cuts = [t for t in cuts if 0.0 <= t <= total_t + 1e-6]
     cuts.sort()
 
-    # Build stream: treble, 4/4, allowed durations only, NO TIES
+    # stream: treble, 4/4, allowed durations, NO ties
     s = stream.Stream()
     s.append(tempo.MetronomeMark(number=tempo_used))
     s.append(meter.TimeSignature("4/4"))
@@ -167,14 +170,12 @@ def analyze_to_stream(
         t0, t1 = cuts[i], cuts[i + 1]
         seg = y[int(t0 * sr):int(t1 * sr)]
 
-        # raw duration → allowed set
         dur_q_raw = (t1 - t0) / q_sec
         qlen_allowed = pick_allowed_duration(dur_q_raw, quantize_strategy)
 
-        # PITCH (unchanged)
         if len(seg) < int(0.01 * sr):
             pieces = split_across_measures_no_tie(qlen_allowed, pos_in_measure)
-            for kind, ql in pieces:
+            for _, ql in pieces:
                 s.append(note.Rest(quarterLength=ql))
                 pos_in_measure = (pos_in_measure + ql) % 4.0
             continue
@@ -184,7 +185,7 @@ def analyze_to_stream(
 
         if f0.size == 0:
             pieces = split_across_measures_no_tie(qlen_allowed, pos_in_measure)
-            for kind, ql in pieces:
+            for _, ql in pieces:
                 s.append(note.Rest(quarterLength=ql))
                 pos_in_measure = (pos_in_measure + ql) % 4.0
         else:
@@ -201,9 +202,7 @@ def analyze_to_stream(
                 if kind == "rest":
                     s.append(note.Rest(quarterLength=ql))
                 else:
-                    n = note.Note(pname, quarterLength=ql)
-                    # NO ties: do not set n.tie
-                    s.append(n)
+                    s.append(note.Note(pname, quarterLength=ql))  # NO ties added
                 pos_in_measure = (pos_in_measure + ql) % 4.0
 
     # key detection
@@ -215,19 +214,13 @@ def analyze_to_stream(
         s.insert(0, m21key.Key("C", "major"))
         key_text = "C major"
 
-    # Engraving: measures & beams; ties won't be created because we never cross bars
     s.makeMeasures(inPlace=True)
     s.makeNotation(inPlace=True, meterStream=s.recurse().getElementsByClass(meter.TimeSignature))
 
-    # UI list
     notes_list = []
     for el in s.flat.notes:
         nm, oc = note_to_name_octave(el)
-        notes_list.append({
-            "note": nm,
-            "octave": oc,
-            "duration_q": float(el.quarterLength)
-        })
+        notes_list.append({"note": nm, "octave": oc, "duration_q": float(el.quarterLength)})
 
     return s, key_text, float(tempo_used), notes_list
 
@@ -251,19 +244,27 @@ def compute_transpose_interval(from_key_text: str, to_key_text: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not compute transpose interval: {e}")
 
-# ----------------------- endpoints -----------------------
+# ----------------------- ROUTES -----------------------
 @app.get("/")
 def root():
-    return {"status": "ok", "endpoints": ["/api/transcribe-and-transpose", "/docs"]}
+    return {
+        "status": "ok",
+        "endpoints": [
+            "/api/transcribe-and-transpose",
+            "/analyzeSinglePlayer",
+            "/docs",
+        ],
+    }
 
+# --- Transcribe + transpose endpoint (from your app.py) ---
 @app.post("/api/transcribe-and-transpose")
 async def transcribe_and_transpose(
     audio: UploadFile = File(...),
     target_key: str = Form(default=""),
     semitones: int = Form(default=0),
-    # Rhythm knobs (divisions is ignored here; strategy + bpm_override are used)
-    quantize_divisions: int = Form(default=8),
-    quantize_strategy: str = Form(default="nearest"),
+    # rhythm controls
+    quantize_divisions: int = Form(default=8),        # kept for compatibility; ignored
+    quantize_strategy: str = Form(default="nearest"), # "nearest" | "floor" | "ceil"
     bpm_override: float | None = Form(default=None),
 ):
     raw = await audio.read()
@@ -278,12 +279,11 @@ async def transcribe_and_transpose(
     wav_bytes = transcode_to_wav_bytes(raw, ext)
     base_stream, detected_key, bpm, notes_list = analyze_to_stream(
         wav_bytes,
-        quantize_divisions=quantize_divisions,   # kept for compatibility; ignored
+        quantize_divisions=quantize_divisions,
         quantize_strategy=quantize_strategy,
         bpm_override=bpm_override,
     )
 
-    # original
     orig_xml, orig_midi = export_stream(base_stream)
 
     # transposed
@@ -313,3 +313,69 @@ async def transcribe_and_transpose(
         "original": {"musicxml": orig_xml, "midiB64": orig_midi},
         "transposed": {"musicxml": trans_xml, "midiB64": trans_midi},
     })
+
+# --- Game endpoint (from your server.py) ---
+@app.post("/analyzeSinglePlayer")
+async def analyze_single_player_endpoint(
+    song_key: str = Form(...),
+    player_audio: UploadFile = File(...),
+):
+    ensure_ffmpeg()  # pydub also needs ffmpeg
+
+    # 1) write upload to temp webm
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp_in:
+        raw_bytes = await player_audio.read()
+        tmp_in.write(raw_bytes)
+        webm_path = tmp_in.name
+
+    # 2) make temp wav path
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_out:
+        wav_path = tmp_out.name
+
+    # 3) transcode webm -> wav (mono, 22050)
+    try:
+        audio_seg = AudioSegment.from_file(webm_path, format="webm")
+        audio_seg = audio_seg.set_channels(1).set_frame_rate(22050)
+        audio_seg.export(wav_path, format="wav")
+    except Exception as e:
+        try: os.remove(webm_path)
+        except: pass
+        try: os.remove(wav_path)
+        except: pass
+        raise e
+
+    # 4) run your analyzer
+    try:
+        result = analyze_single_player(wav_path, song_key=song_key)
+
+        # optional debug
+        try:
+            audio_data, sr = sf.read(wav_path)
+            dur_sec = float(len(audio_data) / sr)
+        except Exception:
+            dur_sec = -1.0
+
+        print("---- analyzeSinglePlayer DEBUG ----")
+        print(f"song_key: {song_key}")
+        print(f"uploaded filename: {player_audio.filename}")
+        print(f"raw upload size (bytes): {len(raw_bytes)}")
+        print(f"temp webm path: {webm_path}")
+        print(f"temp wav  path: {wav_path}")
+        print(f"audio duration (sec): {dur_sec:.3f}")
+        print(f"analysis.notes: {result.get('notes')}")
+        print(f"analysis.accuracy: {result.get('accuracy')}")
+        print(f"analysis.score: {result.get('score')}")
+        print("-----------------------------------")
+    finally:
+        # 5) clean up temps
+        try: os.remove(webm_path)
+        except: pass
+        try: os.remove(wav_path)
+        except: pass
+
+    # 6) return JSON
+    return {
+        "notes": result["notes"],
+        "accuracy": result["accuracy"],
+        "score": result["score"],
+    }

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -9,13 +9,12 @@ import CountdownOverlay from './CountdownOverlay';
 import { playClickSound, playSuccessSound } from '../utils/soundEffects';
 import { motion } from 'framer-motion';
 import { Input } from './ui/input';
-import React from 'react';
 
 interface Performance {
   player: string;
   score: number;
   notes: string[];
-  accuracy: number;
+  accuracy: number; // 0-100 (already rounded in code)
 }
 
 export default function GameMode() {
@@ -28,12 +27,10 @@ export default function GameMode() {
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-
   const chunksRef = useRef<BlobPart[]>([]);
-
   const lastBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
@@ -42,20 +39,13 @@ export default function GameMode() {
     };
   }, []);
 
-  useEffect(() => {
-    if (recordingTime >= 10 && isRecording) {
-      stopRecording();
-    }
-  }, [recordingTime, isRecording]);
+  const songs = ['Happy Birthday', 'Thotiana', 'Twinkle Twinkle Little Star'];
 
-  const songs = [
-    'Happy Birthday',
-    'Thotiana',
-    'Twinkle Twinkle Little Star'
-  ];
   const SONG_KEY_MAP: Record<string, string> = {
     'Happy Birthday': 'happy_birthday',
+    // add more mappings when backend supports more songs
   };
+
   const randomizeSong = () => {
     playClickSound();
     const randomSong = songs[Math.floor(Math.random() * songs.length)];
@@ -71,45 +61,40 @@ export default function GameMode() {
     setPermissionError(null);
 
     try {
-      // ask for mic
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // create MediaRecorder for this stream
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
-      // reset chunks at the start of each new recording
       chunksRef.current = [];
 
-      // every time MediaRecorder has audio data, push it into chunksRef
       mediaRecorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
           chunksRef.current.push(event.data);
         }
       };
 
-      // when user stops (or we auto-stop at 10s)
       mediaRecorder.onstop = async () => {
-        // stop the actual mic input tracks
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
 
-        // build a single Blob from all chunks
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         lastBlobRef.current = blob;
 
-        // now analyze THIS player's performance with backend
         await analyzePerformance(blob);
       };
 
-      // begin recording
       mediaRecorder.start();
       setIsRecording(true);
       setGameState('recording');
       setRecordingTime(0);
 
-      // start countdown to 10s
       timerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
+        setRecordingTime((prev) => {
+          if (prev >= 9) {
+            stopRecording();
+            return 10;
+          }
+          return prev + 1;
+        });
       }, 1000);
     } catch (error) {
       console.error('Error accessing microphone:', error);
@@ -130,11 +115,10 @@ export default function GameMode() {
     }
   };
 
-
   const stopRecording = () => {
     playClickSound();
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop(); 
+      mediaRecorderRef.current.stop();
       setIsRecording(false);
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -142,52 +126,37 @@ export default function GameMode() {
     }
   };
 
-
   const analyzePerformance = async (audioBlob: Blob) => {
     try {
-      console.log("▶ analyzePerformance called");
-      console.log("currentPlayer:", currentPlayer);
-      console.log("targetSong:", targetSong);
-  
       const formData = new FormData();
-  
       const songKey = SONG_KEY_MAP[targetSong] || 'happy_birthday';
-      console.log("sending songKey:", songKey);
-  
+
       formData.append('song_key', songKey);
       formData.append('player_audio', audioBlob, `player${currentPlayer}.webm`);
-  
-      console.log("audioBlob:", {
-        type: audioBlob.type,
-        size: audioBlob.size
-      });
-  
+
       const res = await fetch('http://localhost:8000/analyzeSinglePlayer', {
         method: 'POST',
         body: formData,
       });
-  
-      console.log("response status:", res.status);
-  
+
       if (!res.ok) {
         const text = await res.text();
-        console.error("backend error body:", text);
+        console.error('backend error body:', text);
         throw new Error(`Backend returned status ${res.status}`);
       }
-  
+
       const data = await res.json();
-      console.log("backend json:", data);
-  
+
       const performanceResult: Performance = {
         player: `Player ${currentPlayer}`,
         score: data.score,
         notes: data.notes,
         accuracy: Math.round(data.accuracy * 100),
       };
-  
-      setPerformances(prev => [...prev, performanceResult]);
+
+      setPerformances((prev) => [...prev, performanceResult]);
       playSuccessSound();
-  
+
       if (currentPlayer === 1) {
         setCurrentPlayer(2);
         setGameState('setup');
@@ -200,8 +169,6 @@ export default function GameMode() {
       setGameState('setup');
     }
   };
-  
-
 
   const resetGame = () => {
     playClickSound();
@@ -224,17 +191,14 @@ export default function GameMode() {
   return (
     <div className="space-y-6">
       {/* Countdown Overlay */}
-      {gameState === 'countdown' && (
-        <CountdownOverlay onComplete={startRecording} />
-      )}
+      {gameState === 'countdown' && <CountdownOverlay onComplete={startRecording} />}
 
       {/* Game Header */}
       <Card className="border border-white/60 bg-gradient-to-br from-white/70 to-white/50 backdrop-blur-xl text-[#1e3a5f] shadow-2xl relative overflow-visible z-20">
         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent" />
-        
         <div className="absolute -top-10 -left-10 w-40 h-40 bg-[#4a7ba7]/20 rounded-full blur-3xl" />
         <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-[#1e66b8]/20 rounded-full blur-3xl" />
-        
+
         <CardHeader className="relative">
           <CardTitle className="flex items-center gap-3 text-[#1e3a5f] text-2xl" style={{ fontWeight: 700 }}>
             <div className="bg-[#1e66b8] p-3 rounded-xl flex items-center justify-center">
@@ -246,26 +210,21 @@ export default function GameMode() {
             Two players compete to perform the target song with the highest accuracy!
           </CardDescription>
         </CardHeader>
+
         <CardContent className="relative space-y-4 pb-6 overflow-visible">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-4 flex-wrap">
-              <Badge 
-                variant="outline" 
-                className="gap-2 bg-white/30 backdrop-blur-sm border-[#1e66b8]/30 text-[#1e3a5f] hover:bg-white/40"
-              >
+              <Badge variant="outline" className="gap-2 bg-white/30 backdrop-blur-sm border-[#1e66b8]/30 text-[#1e3a5f] hover:bg-white/40">
                 <Users className="w-4 h-4" />
                 2 Players
               </Badge>
-              <Badge 
-                variant="outline" 
-                className="bg-white/30 border-[#1e66b8]/60 text-[#1e3a5f] hover:bg-white/40"
-              >
+              <Badge variant="outline" className="bg-white/30 border-[#1e66b8]/60 text-[#1e3a5f] hover:bg-white/40">
                 Max 10 seconds per player
               </Badge>
             </div>
             {gameState === 'results' && (
-              <button 
-                onClick={resetGame} 
+              <button
+                onClick={resetGame}
                 className="flex items-center gap-2 px-4 py-2 bg-white/30 backdrop-blur-sm border border-[#1e66b8]/30 rounded-lg text-[#1e3a5f] hover:bg-white/40 transition-all duration-300 hover:scale-105"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -279,7 +238,9 @@ export default function GameMode() {
             <div className="flex items-center justify-between gap-4 mb-4">
               <div className="flex-1">
                 <p className="text-[#1e3a5f]/70 text-sm mb-1">Target Song</p>
-                <p className="text-2xl text-[#1e3a5f]" style={{ fontWeight: 700 }}>{targetSong}</p>
+                <p className="text-2xl text-[#1e3a5f]" style={{ fontWeight: 700 }}>
+                  {targetSong}
+                </p>
               </div>
               <button
                 onClick={randomizeSong}
@@ -289,7 +250,7 @@ export default function GameMode() {
                 Random Song
               </button>
             </div>
-            
+
             {/* Search Bar */}
             <div className="relative z-20">
               <div className="relative">
@@ -307,7 +268,7 @@ export default function GameMode() {
                   className="pl-10 bg-white/60 border-white/70 text-[#1e3a5f] placeholder:text-[#1e3a5f]/40"
                 />
               </div>
-              
+
               {/* Search Suggestions */}
               {showSuggestions && (
                 <motion.div
@@ -316,9 +277,7 @@ export default function GameMode() {
                   className="absolute top-full left-0 right-0 mt-2 bg-white/95 backdrop-blur-xl border border-white/70 rounded-lg shadow-2xl overflow-hidden z-[100] max-h-[180px] overflow-y-auto"
                 >
                   {songs
-                    .filter(song => 
-                      song.toLowerCase().includes(searchQuery.toLowerCase())
-                    )
+                    .filter((song) => song.toLowerCase().includes(searchQuery.toLowerCase()))
                     .slice(0, 5)
                     .map((song, index) => (
                       <button
@@ -337,12 +296,8 @@ export default function GameMode() {
                         </div>
                       </button>
                     ))}
-                  {songs.filter(song => 
-                    song.toLowerCase().includes(searchQuery.toLowerCase())
-                  ).length === 0 && (
-                    <div className="px-4 py-3 text-[#1e3a5f]/50 text-center">
-                      No songs found
-                    </div>
+                  {songs.filter((song) => song.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                    <div className="px-4 py-3 text-[#1e3a5f]/50 text-center">No songs found</div>
                   )}
                 </motion.div>
               )}
@@ -355,25 +310,23 @@ export default function GameMode() {
       {gameState !== 'results' && (
         <Card className="border border-white/60 shadow-xl bg-gradient-to-br from-white/70 to-white/50 backdrop-blur-xl relative overflow-hidden z-10">
           {/* Musical symbol decoration */}
-          <div className="absolute bottom-8 right-8 opacity-10 text-9xl text-[#1e3a5f]">
-            {currentPlayer === 1 ? '𝄞' : '♫'}
-          </div>
-          
+          <div className="absolute bottom-8 right-8 opacity-10 text-9xl text-[#1e3a5f]">{currentPlayer === 1 ? '𝄞' : '♫'}</div>
+
           <CardHeader className="relative">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <CardTitle className="text-[#1e3a5f] text-2xl" style={{ fontWeight: 700 }}>Player {currentPlayer}'s Turn</CardTitle>
+                <CardTitle className="text-[#1e3a5f] text-2xl" style={{ fontWeight: 700 }}>
+                  Player {currentPlayer}'s Turn
+                </CardTitle>
                 <CardDescription className="text-[#1e3a5f]/70">
-                  {isRecording
-                    ? `Recording... ${formatTime(recordingTime)} / 0:10`
-                    : 'Ready to perform? Click the microphone to start!'}
+                  {isRecording ? `Recording... ${formatTime(recordingTime)} / 0:10` : 'Ready to perform? Click the microphone to start!'}
                 </CardDescription>
               </div>
               <Badge
                 variant="secondary"
                 className={`text-lg px-6 py-3 ${
-                  currentPlayer === 1 
-                    ? 'bg-gradient-to-r from-[#1e66b8] to-[#2d5a8f] text-white hover:from-[#2d5a8f] hover:to-[#4a7ba7]' 
+                  currentPlayer === 1
+                    ? 'bg-gradient-to-r from-[#1e66b8] to-[#2d5a8f] text-white hover:from-[#2d5a8f] hover:to-[#4a7ba7]'
                     : 'bg-gradient-to-r from-[#2d5a8f] to-[#4a7ba7] text-white hover:from-[#4a7ba7] hover:to-[#5a8bc0]'
                 } transition-all duration-300 shadow-lg hover:scale-105`}
               >
@@ -381,6 +334,7 @@ export default function GameMode() {
               </Badge>
             </div>
           </CardHeader>
+
           <CardContent className="space-y-6 relative">
             {!isRecording ? (
               <div className="flex flex-col items-center gap-6 py-8">
@@ -388,23 +342,22 @@ export default function GameMode() {
                   <>
                     <div className="text-center space-y-4">
                       <p className="text-[#1e3a5f]/70">Get ready to perform</p>
-                      <p className="text-3xl text-[#1e3a5f]" style={{ fontWeight: 700 }}>{targetSong}</p>
+                      <p className="text-3xl text-[#1e3a5f]" style={{ fontWeight: 700 }}>
+                        {targetSong}
+                      </p>
                       <div className="flex gap-6 justify-center mt-6 text-5xl opacity-30 text-[#1e3a5f]">
-                        <motion.span
-                          animate={{ y: [0, -10, 0] }}
-                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                        >
+                        <motion.span animate={{ y: [0, -10, 0] }} transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}>
                           ♪
                         </motion.span>
                         <motion.span
                           animate={{ y: [0, -10, 0] }}
-                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}
+                          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
                         >
                           ♫
                         </motion.span>
                         <motion.span
                           animate={{ y: [0, -10, 0] }}
-                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
+                          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: 0.6 }}
                         >
                           ♬
                         </motion.span>
@@ -487,24 +440,16 @@ export default function GameMode() {
                     <motion.span
                       key={i}
                       className="text-[#1e66b8]"
-                      animate={{
-                        y: [0, -20, 0],
-                        opacity: [0.3, 1, 0.3],
-                        color: ['#ffffff', '#1e66b8', '#ffffff', '#1e66b8'],
-                      }}
-                      transition={{
-                        duration: 1.5,
-                        repeat: Infinity,
-                        delay: i * 0.2,
-                      }}
+                      animate={{ y: [0, -20, 0], opacity: [0.3, 1, 0.3], color: ['#ffffff', '#1e66b8', '#ffffff', '#1e66b8'] }}
+                      transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
                     >
                       {['♪', '♫', '♬'][i % 3]}
                     </motion.span>
                   ))}
                 </div>
 
-                <button 
-                  onClick={stopRecording} 
+                <button
+                  onClick={stopRecording}
                   className="px-8 py-4 bg-gradient-to-r from-[#2d5a8f] to-[#4a7ba7] hover:from-[#1e66b8] hover:to-[#2d5a8f] text-white rounded-xl shadow-lg transition-all duration-300 flex items-center gap-2"
                 >
                   <Square className="w-5 h-5 fill-white" />
@@ -524,11 +469,62 @@ export default function GameMode() {
               <Trophy className="w-6 h-6 text-[#1e66b8]" />
               Battle Results
             </CardTitle>
-            <CardDescription className="text-[#1e3a5f]/70">
-              Here's how both players performed!
-            </CardDescription>
+            <CardDescription className="text-[#1e3a5f]/70">Here's how both players performed!</CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-6">
+            {/* Notes Played Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Player 1 Notes */}
+              <div className="p-4 rounded-xl border border-white/60 bg-white/40">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[#1e3a5f]" style={{ fontWeight: 700 }}>
+                    Player 1 — Notes Played
+                  </h4>
+                  {performances[0] && <Badge className="bg-[#1e66b8] text-white">{performances[0].notes.length} notes</Badge>}
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-28 overflow-auto pr-1">
+                  {performances[0]?.notes?.length ? (
+                    performances[0].notes.map((n, i) => (
+                      <span
+                        key={`p1-${i}-${n}`}
+                        className="px-2 py-1 text-sm rounded-md border border-[#1e66b8]/30 bg-white/60 text-[#1e3a5f]"
+                      >
+                        {n}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[#1e3a5f]/60">No notes detected</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Player 2 Notes */}
+              <div className="p-4 rounded-xl border border-white/60 bg-white/40">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[#1e3a5f]" style={{ fontWeight: 700 }}>
+                    Player 2 — Notes Played
+                  </h4>
+                  {performances[1] && <Badge className="bg-[#1e66b8] text-white">{performances[1].notes.length} notes</Badge>}
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-28 overflow-auto pr-1">
+                  {performances[1]?.notes?.length ? (
+                    performances[1].notes.map((n, i) => (
+                      <span
+                        key={`p2-${i}-${n}`}
+                        className="px-2 py-1 text-sm rounded-md border border-[#1e66b8]/30 bg-white/60 text-[#1e3a5f]"
+                      >
+                        {n}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[#1e3a5f]/60">No notes detected</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Existing score cards */}
             {performances.map((perf, idx) => (
               <div
                 key={idx}
@@ -541,13 +537,9 @@ export default function GameMode() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl text-[#1e3a5f]" style={{ fontWeight: 700 }}>
                     {perf.player}
-                    {getWinner()?.player === perf.player && (
-                      <span className="ml-2 text-2xl">🏆</span>
-                    )}
+                    {getWinner()?.player === perf.player && <span className="ml-2 text-2xl">🏆</span>}
                   </h3>
-                  <Badge className="bg-[#1e66b8] text-white text-lg px-4 py-2">
-                    {perf.score} pts
-                  </Badge>
+                  <Badge className="bg-[#1e66b8] text-white text-lg px-4 py-2">{perf.score} pts</Badge>
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm text-[#1e3a5f]/70">
@@ -564,4 +556,3 @@ export default function GameMode() {
     </div>
   );
 }
-

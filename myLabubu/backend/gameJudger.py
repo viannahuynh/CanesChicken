@@ -339,5 +339,3 @@ if __name__ == "__main__":
     print("Detected notes:", result2["notes"])
     print("Accuracy:", round(result2["accuracy"] * 100, 1), "%")
     print("Score:", result2["score"])
-
-
