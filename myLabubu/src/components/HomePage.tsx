@@ -136,7 +136,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               ♪
             </div>
           </motion.div>
-          <span className="text-[#1e3a5f] text-2xl" style={{ fontWeight: 700 }}>Aww Sheet.</span>
+          <span className="text-[#1e3a5f] text-2xl" style={{ fontWeight: 700 }}>Aww Sheet!</span>
         </div>
         <div className="flex items-center gap-8">
           <button
@@ -173,7 +173,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            Aww Sheet.
+            Aww Sheet!
           </motion.h1>
           <motion.p
             className="text-[#1e3a5f] text-2xl mb-12"
@@ -267,7 +267,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           >
             <div className="bg-gradient-to-br from-white/80 to-white/60 backdrop-blur-xl rounded-[40px] p-8 shadow-2xl border border-white/70 hover:shadow-3xl transition-all hover:scale-105">
               <div className="flex flex-col items-center gap-4">
-                <div className="w-24 h-24 bg-gradient-to-br from-[#2d5a8f] to-[#4a7ba7] rounded-full flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
+                <div className="w-24 h-24 bg-gradient-to-br from-[#1e66b8] to-[#2d5a8f] rounded-full flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
                   <Gamepad2 className="w-12 h-12 text-white" />
                 </div>
                 <span className="text-[#1e3a5f] text-xl" style={{ fontWeight: 600 }}>Game Mode</span>
