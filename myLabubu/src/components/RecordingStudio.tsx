@@ -104,7 +104,7 @@ export default function RecordingStudio() {
     // optional transpose:
     // form.append("target_key", "G major");
 
-    const res = await fetch("https://www.awwsheet.ink/api/transcribe-and-transpose", {
+    const res = await fetch("https://caneschicken.onrender.com/api/transcribe-and-transpose", {
       method: "POST",
       body: form,
     });
