@@ -20,7 +20,6 @@ interface Chord {
 }
 
 export default function ChordSuggestions({ notes, keySignature }: ChordSuggestionsProps) {
-  // Mock chord suggestions based on the key signature
   const generateChordSuggestions = (): Chord[] => {
     if (keySignature.includes('G Major') || keySignature.includes('E Minor')) {
       return [

@@ -209,7 +209,7 @@ export default function RecordingStudio() {
             Recording Studio
           </CardTitle>
           <CardDescription className="text-[#1e3a5f]/70 text-lg">
-            Record any instrument performance and watch it transform into beautiful sheet music!
+            Record any instrumental performance! For better results record in a quiet environment.
           </CardDescription>
         </CardHeader>
 

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-
+// you found this singing monster! 🐲🎤 EASTER EGGG
 interface SingingMonsterProps {
   color: 'green' | 'blue' | 'orange' | 'yellow' | 'teal';
   size?: 'small' | 'medium' | 'large';

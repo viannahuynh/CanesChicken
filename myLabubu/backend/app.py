@@ -6,14 +6,11 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from music21 import stream, note, meter, tempo, key as m21key, interval, pitch, clef
-
-# --- imports for the game endpoint ---
-from pydub import AudioSegment              # for webm -> wav
-from gameJudger import analyze_single_player  # your existing analysis
+from pydub import AudioSegment            
+from gameJudger import analyze_single_player  
 
 app = FastAPI()
 
-# CORS for your React app
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -25,7 +22,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ----------------------- shared helpers -----------------------
 def note_to_name_octave(n: note.Note) -> tuple[str, int]:
     step = n.pitch.step
     acc = n.pitch.accidental
@@ -164,7 +160,7 @@ def analyze_to_stream(
     s.append(meter.TimeSignature("4/4"))
     s.append(clef.TrebleClef())
 
-    pos_in_measure = 0.0  # in quarters
+    pos_in_measure = 0.0 
 
     for i in range(len(cuts) - 1):
         t0, t1 = cuts[i], cuts[i + 1]
@@ -244,7 +240,7 @@ def compute_transpose_interval(from_key_text: str, to_key_text: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not compute transpose interval: {e}")
 
-# ----------------------- ROUTES -----------------------
+## Endpoints
 @app.get("/")
 def root():
     return {
@@ -256,7 +252,7 @@ def root():
         ],
     }
 
-# --- Transcribe + transpose endpoint (from your app.py) ---
+
 @app.post("/api/transcribe-and-transpose")
 async def transcribe_and_transpose(
     audio: UploadFile = File(...),

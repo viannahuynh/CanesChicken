@@ -2,12 +2,8 @@ import numpy as np
 import librosa
 from scipy.ndimage import median_filter
 
-########################################
-# SONG DEFINITIONS / REFERENCE MELODIES
-########################################
 
-# This is the "correct" violin line for Happy Birthday in D major
-# based on the sheet you showed (starts on D4, includes F#4, etc.).
+
 HAPPY_BIRTHDAY_NOTES = [
     "D4","D4","E4","D4","G4","F#4",
     "D4","D4","E4","D4","A4","G4",
@@ -16,20 +12,11 @@ HAPPY_BIRTHDAY_NOTES = [
 ]
 
 
-# You can add more songs later:
-# TWINKLE_TWINKLE = [ ... ]
-# MARY_HAD_A_LITTLE_LAMB = [ ... ]
 
 SONGS = {
     "happy_birthday": HAPPY_BIRTHDAY_NOTES,
-    # "twinkle": TWINKLE_TWINKLE,
-    # "mary": MARY_HAD_A_LITTLE_LAMB,
 }
 
-
-########################################
-# NOTE NAME HELPERS
-########################################
 
 NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
@@ -82,11 +69,6 @@ def correct_violin_register(freq_hz, low_ok=200.0):
             return c
     return freq_hz
 
-
-########################################
-# CORE PITCH TRACKING + SEGMENTING
-########################################
-
 def analyze_violin_notes(
     audio_path,
     fmin_note="C3",
@@ -115,7 +97,6 @@ def analyze_violin_notes(
     y, sr = librosa.load(audio_path, sr=None, mono=True)
 
     # 2. Estimate pitch curve using pyin
-    #    fmin/fmax are bounds in Hz derived from musical note names
     f0, voiced_flag, voiced_prob = librosa.pyin(
         y,
         fmin=librosa.note_to_hz(fmin_note),
@@ -123,10 +104,6 @@ def analyze_violin_notes(
         frame_length=frame_length,
         hop_length=hop_length,
     )
-    # f0: array of floats (Hz) or np.nan
-    # voiced_flag: array of booleans (is this frame voiced?)
-    # voiced_prob: array of confidences [0..1]
-
     # time for each frame
     times = librosa.frames_to_time(
         np.arange(len(f0)),
@@ -158,13 +135,12 @@ def analyze_violin_notes(
             frame_notes.append(hz_to_note_info(adj_freq))
 
     # 6. Merge consecutive frames that represent "the same note"
-    #    We'll tolerate small cents drift so vibrato doesn't split notes.
     segments = []
     if any(n is not None for n in frame_notes):
         curr_start_t = None
         curr_end_t = None
-        curr_ref_note = None      # (midi_ref, cents_ref)
-        curr_note_name = None     # e.g. "D4"
+        curr_ref_note = None      
+        curr_note_name = None     
 
         def is_same_note(prev_ref, curr_candidate, tolerance_cents):
             if prev_ref is None or curr_candidate is None:
@@ -177,7 +153,6 @@ def analyze_violin_notes(
 
         for t, n in zip(times, frame_notes):
             if n is None:
-                # pitch dropped / unconfident -> close current segment if open
                 if curr_start_t is not None:
                     segments.append({
                         "note": curr_note_name,

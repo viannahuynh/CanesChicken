@@ -14,7 +14,7 @@ interface Performance {
   player: string;
   score: number;
   notes: string[];
-  accuracy: number; // 0-100 (already rounded in code)
+  accuracy: number; 
 }
 
 export default function GameMode() {
@@ -49,7 +49,7 @@ export default function GameMode() {
 
   const SONG_KEY_MAP: Record<string, string> = {
     'Happy Birthday': 'happy_birthday',
-    // add more mappings when backend supports more songs
+    
   };
 
   const randomizeSong = () => {

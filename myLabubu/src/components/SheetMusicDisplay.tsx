@@ -17,7 +17,7 @@ interface SheetMusicDisplayProps {
     tempo: number;
     timeSignature: string;
   };
-  musicXML?: string; // optional from backend
+  musicXML?: string; 
 }
 
 export default function SheetMusicDisplay({ music, musicXML }: SheetMusicDisplayProps) {
@@ -29,7 +29,6 @@ export default function SheetMusicDisplay({ music, musicXML }: SheetMusicDisplay
       if (!musicXML || !osmdHostRef.current) return;
 
       try {
-        // initialize once
         if (!osmdRef.current) {
           osmdRef.current = new OpenSheetMusicDisplay(osmdHostRef.current, {
             autoResize: true,
@@ -48,7 +47,7 @@ export default function SheetMusicDisplay({ music, musicXML }: SheetMusicDisplay
     };
 
     renderScore();
-  }, [musicXML]); // re-render when XML changes
+  }, [musicXML]); 
 
   const getDurationSymbol = (duration: number) => {
     if (duration >= 1.5) return ;

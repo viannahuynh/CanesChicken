@@ -6,7 +6,7 @@ export default function AnimatedTrebleClef() {
   
   return (
     <div ref={containerRef} className="relative w-64 h-64 mx-auto perspective-1000">
-      {/* Main 3D Rotating Treble Clef */}
+      
       <motion.div
         className="relative w-full h-full preserve-3d"
         animate={{ 
@@ -18,7 +18,7 @@ export default function AnimatedTrebleClef() {
           ease: "linear" 
         }}
       >
-        {/* Front face */}
+        
         <div className="absolute inset-0 flex items-center justify-center backface-hidden">
           <motion.div 
             className="text-[200px] leading-none text-black"
@@ -37,8 +37,7 @@ export default function AnimatedTrebleClef() {
             𝄞
           </motion.div>
         </div>
-        
-        {/* Back face */}
+
         <div className="absolute inset-0 flex items-center justify-center backface-hidden rotate-y-180">
           <motion.div 
             className="text-[200px] leading-none text-gray-900"
@@ -59,7 +58,7 @@ export default function AnimatedTrebleClef() {
         </div>
       </motion.div>
       
-      {/* Expanding Notes - Inner Ring */}
+
       {[...Array(8)].map((_, i) => (
         <motion.div
           key={`inner-${i}`}
@@ -116,8 +115,6 @@ export default function AnimatedTrebleClef() {
           {['♪', '♫', '♬', '𝄞'][i % 4]}
         </motion.div>
       ))}
-      
-      {/* Floating notes around */}
       {[...Array(6)].map((_, i) => (
         <motion.div
           key={`float-${i}`}
@@ -140,8 +137,6 @@ export default function AnimatedTrebleClef() {
           {['♪', '♫', '♬'][i % 3]}
         </motion.div>
       ))}
-      
-      {/* Subtle glow underneath */}
       <div className="absolute inset-0 -z-10 blur-3xl opacity-20 bg-gradient-to-br from-black via-gray-500 to-black animate-pulse" />
     </div>
   );
