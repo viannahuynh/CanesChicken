@@ -9,6 +9,7 @@ import CountdownOverlay from './CountdownOverlay';
 import { playClickSound, playSuccessSound } from '../utils/soundEffects';
 import { motion } from 'framer-motion';
 import { Input } from './ui/input';
+import React from 'react';
 
 interface Performance {
   player: string;
@@ -23,13 +24,17 @@ export default function GameMode() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [performances, setPerformances] = useState<Performance[]>([]);
-  const [targetSong, setTargetSong] = useState<string>('Twinkle Twinkle Little Star');
+  const [targetSong, setTargetSong] = useState<string>('Happy Birthday');
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const chunksRef = useRef<BlobPart[]>([]);
+
+  const lastBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     return () => {
@@ -38,18 +43,13 @@ export default function GameMode() {
   }, []);
 
   const songs = [
-    'Twinkle Twinkle Little Star',
-    'Mary Had a Little Lamb',
     'Happy Birthday',
-    'Ode to Joy',
-    'Jingle Bells',
-    'Canon in D',
-    'Für Elise',
-    'Swan Lake',
-    'The Four Seasons',
-    'Moonlight Sonata',
+    'Thotiana',
+    'Twinkle Twinkle Little Star'
   ];
-
+  const SONG_KEY_MAP: Record<string, string> = {
+    'Happy Birthday': 'happy_birthday',
+  };
   const randomizeSong = () => {
     playClickSound();
     const randomSong = songs[Math.floor(Math.random() * songs.length)];
@@ -63,26 +63,49 @@ export default function GameMode() {
 
   const startRecording = async () => {
     setPermissionError(null);
-    
+
     try {
+      // ask for mic
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // create MediaRecorder for this stream
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
-      mediaRecorder.onstop = () => {
-        stream.getTracks().forEach(track => track.stop());
-        analyzePerformance();
+      // reset chunks at the start of each new recording
+      chunksRef.current = [];
+
+      // every time MediaRecorder has audio data, push it into chunksRef
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
       };
 
+      // when user stops (or we auto-stop at 10s)
+      mediaRecorder.onstop = async () => {
+        // stop the actual mic input tracks
+        stream.getTracks().forEach(track => track.stop());
+
+        // build a single Blob from all chunks
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        lastBlobRef.current = blob;
+
+        // now analyze THIS player's performance with backend
+        await analyzePerformance(blob);
+      };
+
+      // begin recording
       mediaRecorder.start();
       setIsRecording(true);
       setGameState('recording');
       setRecordingTime(0);
 
+      // start countdown to 10s
       timerRef.current = setInterval(() => {
         setRecordingTime(prev => {
           if (prev >= 9) {
-            stopRecording();
+            stopRecording(); // this will trigger onstop
             return 10;
           }
           return prev + 1;
@@ -90,7 +113,7 @@ export default function GameMode() {
       }, 1000);
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      
+
       if (error instanceof Error) {
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
           setPermissionError('Microphone access was denied. Please enable microphone permissions in your browser settings.');
@@ -102,14 +125,16 @@ export default function GameMode() {
           setPermissionError('Could not access microphone. Please check your browser settings.');
         }
       }
+
       setGameState('setup');
     }
   };
 
+
   const stopRecording = () => {
     playClickSound();
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stop(); 
       setIsRecording(false);
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -117,26 +142,66 @@ export default function GameMode() {
     }
   };
 
-  const analyzePerformance = () => {
-    // Simulate AI analysis
-    const mockPerformance: Performance = {
-      player: `Player ${currentPlayer}`,
-      score: Math.floor(Math.random() * 500) + 500,
-      notes: ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
-      accuracy: Math.floor(Math.random() * 30) + 70,
-    };
 
-    setPerformances(prev => [...prev, mockPerformance]);
-    
-    playSuccessSound();
-
-    if (currentPlayer === 1) {
-      setCurrentPlayer(2);
+  const analyzePerformance = async (audioBlob: Blob) => {
+    try {
+      console.log("▶ analyzePerformance called");
+      console.log("currentPlayer:", currentPlayer);
+      console.log("targetSong:", targetSong);
+  
+      const formData = new FormData();
+  
+      const songKey = SONG_KEY_MAP[targetSong] || 'happy_birthday';
+      console.log("sending songKey:", songKey);
+  
+      formData.append('song_key', songKey);
+      formData.append('player_audio', audioBlob, `player${currentPlayer}.webm`);
+  
+      console.log("audioBlob:", {
+        type: audioBlob.type,
+        size: audioBlob.size
+      });
+  
+      const res = await fetch('http://localhost:8000/analyzeSinglePlayer', {
+        method: 'POST',
+        body: formData,
+      });
+  
+      console.log("response status:", res.status);
+  
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("backend error body:", text);
+        throw new Error(`Backend returned status ${res.status}`);
+      }
+  
+      const data = await res.json();
+      console.log("backend json:", data);
+  
+      const performanceResult: Performance = {
+        player: `Player ${currentPlayer}`,
+        score: data.score,
+        notes: data.notes,
+        accuracy: Math.round(data.accuracy * 100),
+      };
+  
+      setPerformances(prev => [...prev, performanceResult]);
+      playSuccessSound();
+  
+      if (currentPlayer === 1) {
+        setCurrentPlayer(2);
+        setGameState('setup');
+      } else {
+        setGameState('results');
+      }
+    } catch (err) {
+      console.error('Error analyzing performance:', err);
+      setPermissionError('Could not analyze audio. Is the backend running on :8000?');
       setGameState('setup');
-    } else {
-      setGameState('results');
     }
   };
+  
+
 
   const resetGame = () => {
     playClickSound();
@@ -499,3 +564,4 @@ export default function GameMode() {
     </div>
   );
 }
+

@@ -7,6 +7,7 @@ import SheetMusicDisplay from './SheetMusicDisplay';
 import ChordSuggestions from './ChordSuggestions';
 import { playClickSound } from '../utils/soundEffects';
 import { motion, AnimatePresence } from 'framer-motion';
+import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 
 interface AnalyzedMusic {
   notes: Array<{ note: string; duration: number; octave: number }>;
@@ -16,6 +17,7 @@ interface AnalyzedMusic {
 }
 
 export default function RecordingStudio() {
+  const [musicXML, setMusicXML] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -92,31 +94,67 @@ export default function RecordingStudio() {
     }
   };
 
-  const processRecording = () => {
-    setIsProcessing(true);
+  const processRecording = async () => {
+  setIsProcessing(true);
+  try {
+    const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
 
-    // Simulate AI processing with mock data
-    setTimeout(() => {
-      const mockMusic: AnalyzedMusic = {
-        notes: [
-          { note: 'C', duration: 1, octave: 4 },
-          { note: 'C', duration: 1, octave: 4 },
-          { note: 'G', duration: 1, octave: 4 },
-          { note: 'G', duration: 1, octave: 4 },
-          { note: 'A', duration: 1, octave: 4 },
-          { note: 'A', duration: 1, octave: 4 },
-          { note: 'G', duration: 2, octave: 4 },
-          { note: 'F', duration: 1, octave: 4 },
-        ],
-        keySignature: 'C Major',
-        tempo: 120,
-        timeSignature: '4/4',
-      };
+    const form = new FormData();
+    form.append("audio", blob, "take.webm");
+    // optional transpose:
+    // form.append("target_key", "G major");
 
-      setAnalyzedMusic(mockMusic);
-      setIsProcessing(false);
-    }, 2000);
-  };
+    const res = await fetch("http://127.0.0.1:8000/api/transcribe-and-transpose", {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || "Backend error");
+    }
+    const data = await res.json();
+
+    const xml =
+      data?.transposed?.musicxml ??
+      data?.original?.musicxml ??
+      null;
+
+    setMusicXML(xml);
+
+    // Build your existing analyzedMusic from notes/bpm/key
+    const analyzeds: AnalyzedMusic = {
+      notes: (data.notes || []).map((n: any) => ({
+        note: n.note,
+        duration: n.duration_q,
+        octave: n.octave,
+      })),
+      keySignature: data.detectedKey || "C Major",
+      tempo: data.bpm || 120,
+      timeSignature: data.timeSignature || "4/4",
+    };
+    setAnalyzedMusic(analyzeds);
+
+    // // Build the AnalyzedMusic your UI expects
+    // const analyzed: AnalyzedMusic = {
+    //   notes: (data.notes || []).map((n: any) => ({
+    //     note: n.note,                       // e.g., 'C', 'F#', 'Bb'
+    //     duration: n.duration_q,             // quarter lengths: 0.5, 1, 1.5, ...
+    //     octave: n.octave
+    //   })),
+    //   keySignature: data.detectedKey || "C Major",
+    //   tempo: data.bpm || 120,
+    //   timeSignature: data.timeSignature || "4/4",
+    // };
+
+    // setAnalyzedMusic(analyzed);
+    setIsProcessing(false);
+  } catch (err) {
+    console.error(err);
+    setIsProcessing(false);
+    setPermissionError(err instanceof Error ? err.message : "Processing failed.");
+  }
+};
+
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -365,7 +403,7 @@ export default function RecordingStudio() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-6"
         >
-          <SheetMusicDisplay music={analyzedMusic} />
+          <SheetMusicDisplay music={analyzedMusic} musicXML={musicXML || undefined} />
           <ChordSuggestions notes={analyzedMusic.notes} keySignature={analyzedMusic.keySignature} />
         </motion.div>
       )}
